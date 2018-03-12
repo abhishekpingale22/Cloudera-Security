@@ -1,0 +1,108 @@
+steps for a root signed certificate
+
+mkdir CA
+mkdir -p Comp/Keystore Comp/Truststore
+cd CA
+ sudo openssl genrsa -out rootCA.key -aes256 -passout pass:capassword 2048
+
+sudo openssl req -x509 -new -nodes -key rootCA.key -days 4000 -out rootCA.pem -passin pass:capassword -passout pass:capassword -subj '/C=IN/ST=Maharashtra/L=Pune/O=RootCertifyingAuthority/OU=CertifyingAuthority/CN=Admin\/emailAddress=support@rootca.com'
+******************************
+cd Comp/Keystore/
+hostname -f
+
+sudo $JAVA_HOME/bin/keytool -genkeypair -alias c.hortonworks-hadoop-191609.internal -keyalg RSA -keystore c.hortonworks-hadoop-191609.internal.jks -keysize 2048 -dname "CN=*.c.hortonworks-hadoop-191609.internal,OU=Digital,O=HashedNine,L=Pune,ST=Maharashtra,C=IN" -storepass iglooice -keypass iglooice
+
+private key keystore
+***********************************
+
+sudo $JAVA_HOME/bin/keytool -certreq -alias c.hortonworks-hadoop-191609.internal -keystore c.hortonworks-hadoop-191609.internal.jks -file c.hortonworks-hadoop-191609.internal.csr -storepass iglooice -keypass iglooice
+
+csr
+****************
+
+sudo $JAVA_HOME/bin/keytool -noprompt -importcert -trustcacerts -alias rootCA -file ../CA/rootCA.pem -keystore c.hortonworks-hadoop-191609.internal.jks -storepass iglooice -keypass iglooice
+
+
+imported the CA public key in keystore
+***************
+cd ../../CA
+
+cp ../Comp/Keystore/\c.hortonworks-hadoop-191609.internal.csr .
+
+sudo openssl x509 -req -in c.hortonworks-hadoop-191609.internal.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out c.hortonworks-hadoop-191609.internal.pem -days 200 -passin pass:capassword
+
+
+get the signed cert from CA
+**********************
+
+cp \c.hortonworks-hadoop-191609.internal.pem ../Comp/Keystore/
+
+cd ../Comp/Keystore/
+
+openssl x509 -in \c.hortonworks-hadoop-191609.internal.pem -text
+
+
+\verify the certificate details
+*********************************
+
+sudo $JAVA_HOME/bin/keytool -importcert -alias c.hortonworks-hadoop-191609.internal -file c.hortonworks-hadoop-191609.internal.pem -keystore c.hortonworks-hadoop-191609.internal.jks
+
+
+
+******************************************
+cd ../Trsutstore
+
+cp /usr/lib/jvm/jdk1.8.0_161/jre/lib/security/cacerts jssecacerts
+
+sudo $JAVA_HOME/bin/keytool -noprompt -importcert -trustcacerts -alias rootCA -file ../CA/rootCA.pem -keystore jssecacerts -storepass changeit
+
+sudo $JAVA_HOME/bin/keytool -list -keystore \c.hortonworks-hadoop-191609.internal.jks
+
+sudo $JAVA_HOME/bin/keytool -list -keystore jssecacerts
+
+sudo $JAVA_HOME/bin/keytool -storepasswd -new beaver -keystore jssecacerts
+
+
+change the truststore password
+**********************
+/opt/cloudera/security/caauth
+
+
+sudo $JAVA_HOME/bin/keytool -certreq -alias c.hortonworks-hadoop-191609.internal -keystore c.hortonworks-hadoop-191609.internal.jks -ext EKU=serverAuth,clientAuth -file c.hortonworks-hadoop-191609.internal.csr -storepass iglooice -keypass iglooice
+
+
+
+
+$JAVA_HOME/bin/keytool -importkeystore -srckeystore c.hortonworks-hadoop-191609.internal.jks -srcstorepass iglooice -srckeypass iglooice -destkeystore c.hortonworks-hadoop-191609.internal.p12 -deststoretype PKCS12 -srcalias c.hortonworks-hadoop-191609.internal -deststorepass iglooice -destkeypass iglooice
+
+
+
+openssl pkcs12 -in c.hortonworks-hadoop-191609.internal.p12 -passin pass:iglooice -nocerts -out c.hortonworks-hadoop-191609.internal.key -passout pass:iglooice
+
+
+
+ln -s /opt/cloudera/security/pki/$(hostname -f)-agent.key /opt/cloudera/security/pki/agent.ke
+
+
+
+agent.jks
+/opt/cloudera/security/truststore/agent.key
+/opt/cloudera/security/truststore/key.pw
+/opt/cloudera/security/truststore/agent.pem
+agent.pem
+
+
+
+
+# PEM file containing client private key.
+client_key_file=/opt/cloudera/security/truststore/agent.key
+
+# A command to run which returns the client private key password on stdout
+#client_keypw_cmd=                                       
+
+# If client_keypw_cmd isn't specified, instead a text file containing
+# the client private key password can be used.
+client_keypw_file=/opt/cloudera/security/truststore/key.pw
+
+# PEM file containing client certificate.
+client_cert_file=/opt/cloudera/security/truststore/agent.pem
